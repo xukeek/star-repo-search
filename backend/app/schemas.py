@@ -79,6 +79,64 @@ class SyncProgress(BaseModel):
 
 
 class WebSocketMessage(BaseModel):
-    type: str  # "sync_status" | "sync_progress" | "error"
+    type: str  # "sync_status" | "sync_progress" | "readme_status" | "error"
     data: dict
-    timestamp: datetime 
+    timestamp: datetime
+
+
+class RepoReadmeBase(BaseModel):
+    repo_id: int
+    content: str
+    content_hash: str
+    embedding_id: Optional[str] = None
+
+
+class RepoReadmeCreate(RepoReadmeBase):
+    pass
+
+
+class RepoReadme(RepoReadmeBase):
+    id: int
+    processed_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SemanticSearchRequest(BaseModel):
+    query: str
+    limit: int = 10
+    min_similarity: float = 0.5
+
+
+class SemanticSearchResult(BaseModel):
+    repo_id: int
+    repo_name: str
+    full_name: str
+    description: Optional[str] = None
+    language: Optional[str] = None
+    stars: int
+    similarity_score: float
+    content_preview: str
+
+
+class SemanticSearchResponse(BaseModel):
+    results: List[SemanticSearchResult]
+    total: int
+    query: str
+    processing_time: float
+
+
+class ReadmeProcessingStatus(BaseModel):
+    is_processing: bool
+    last_run: Optional[datetime] = None
+    next_run: Optional[datetime] = None
+    total_processed: int
+    message: str
+
+
+class SchedulerStatus(BaseModel):
+    is_running: bool
+    readme_processing: ReadmeProcessingStatus
+    jobs: List[dict] 

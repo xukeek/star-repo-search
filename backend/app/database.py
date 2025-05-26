@@ -1,6 +1,6 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
 from dotenv import load_dotenv
@@ -42,6 +42,24 @@ class StarredRepo(Base):
     default_branch = Column(String)
     license_name = Column(String)
     license_key = Column(String)
+    
+    # 关联README内容
+    readme_content = relationship("RepoReadme", back_populates="repo", uselist=False)
+
+
+class RepoReadme(Base):
+    __tablename__ = "repo_readmes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    repo_id = Column(Integer, ForeignKey("starred_repos.repo_id"), unique=True, index=True)
+    content = Column(Text)  # README原始内容
+    content_hash = Column(String)  # 内容哈希，用于检测变更
+    embedding_id = Column(String)  # 向量数据库中的ID
+    processed_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 关联仓库
+    repo = relationship("StarredRepo", back_populates="readme_content")
 
 
 def get_db():

@@ -5,6 +5,7 @@ from typing import List, Optional
 import asyncio
 import os
 import json
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -12,6 +13,9 @@ from . import crud, schemas
 from .database import get_db, create_tables
 from .github_service import GitHubService
 from .websocket_manager import websocket_manager
+from .vector_service import vector_service
+from .readme_service import readme_service
+from .scheduler import task_scheduler
 
 load_dotenv()
 
@@ -263,6 +267,149 @@ async def get_github_user():
         return user_info
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# README和语义搜索相关API
+@app.post("/readmes/process")
+async def process_readmes(
+    background_tasks: BackgroundTasks,
+    max_repos: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """手动触发README处理"""
+    try:
+        background_tasks.add_task(manual_process_readmes_background, max_repos)
+        return {"message": "README processing started", "max_repos": max_repos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def manual_process_readmes_background(max_repos: Optional[int]):
+    """后台README处理任务"""
+    try:
+        await task_scheduler.manual_process_readmes(max_repos)
+    except Exception as e:
+        print(f"README处理失败: {e}")
+
+
+@app.get("/readmes/stats")
+async def get_readme_stats(db: Session = Depends(get_db)):
+    """获取README处理统计信息"""
+    try:
+        stats = readme_service.get_readme_stats(db)
+        vector_stats = vector_service.get_collection_stats()
+        
+        return {
+            **stats,
+            "vector_stats": vector_stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/repos/semantic-search", response_model=schemas.SemanticSearchResponse)
+async def semantic_search_repos(
+    request: schemas.SemanticSearchRequest,
+    db: Session = Depends(get_db)
+):
+    """语义搜索仓库"""
+    try:
+        start_time = time.time()
+        
+        # 执行向量搜索
+        vector_results = vector_service.semantic_search(
+            query=request.query,
+            limit=request.limit
+        )
+        
+        # 过滤相似度分数
+        filtered_results = [
+            result for result in vector_results 
+            if result["similarity_score"] >= request.min_similarity
+        ]
+        
+        # 获取仓库详细信息
+        search_results = []
+        for result in filtered_results:
+            repo = crud.get_repo_by_repo_id(db, result["repo_id"])
+            if repo:
+                # 截取内容预览
+                content_preview = result["content"][:200] + "..." if len(result["content"]) > 200 else result["content"]
+                
+                search_result = schemas.SemanticSearchResult(
+                    repo_id=repo.repo_id,
+                    repo_name=repo.name,
+                    full_name=repo.full_name,
+                    description=repo.description,
+                    language=repo.language,
+                    stars=repo.stargazers_count,
+                    similarity_score=result["similarity_score"],
+                    content_preview=content_preview
+                )
+                search_results.append(search_result)
+        
+        processing_time = time.time() - start_time
+        
+        return schemas.SemanticSearchResponse(
+            results=search_results,
+            total=len(search_results),
+            query=request.query,
+            processing_time=round(processing_time, 3)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/scheduler/status", response_model=schemas.SchedulerStatus)
+async def get_scheduler_status():
+    """获取调度器状态"""
+    try:
+        status = task_scheduler.get_status()
+        return schemas.SchedulerStatus(**status)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/scheduler/start")
+async def start_scheduler():
+    """启动调度器"""
+    try:
+        await task_scheduler.start()
+        return {"message": "Scheduler started successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/scheduler/stop")
+async def stop_scheduler():
+    """停止调度器"""
+    try:
+        await task_scheduler.stop()
+        return {"message": "Scheduler stopped successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 启动时自动启动调度器
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时的初始化"""
+    try:
+        await task_scheduler.start()
+        print("定时任务调度器已启动")
+    except Exception as e:
+        print(f"启动调度器失败: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭时的清理"""
+    try:
+        await task_scheduler.stop()
+        print("定时任务调度器已停止")
+    except Exception as e:
+        print(f"停止调度器失败: {e}")
 
 
 if __name__ == "__main__":

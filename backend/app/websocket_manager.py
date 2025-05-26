@@ -68,6 +68,15 @@ class WebSocketManager:
             "timestamp": datetime.utcnow().isoformat()
         }
         await self.broadcast(progress_data)
+    
+    async def broadcast_readme_status(self, status: Dict[str, Any]):
+        """广播README处理状态更新"""
+        message = {
+            "type": "readme_status",
+            "data": status,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await self.broadcast(message)
 
 
 # 全局WebSocket管理器实例
