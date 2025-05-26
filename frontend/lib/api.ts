@@ -65,6 +65,13 @@ export interface SyncStatus {
   message: string
 }
 
+export interface SyncProgress {
+  current: number
+  total: number
+  percentage: number
+  message: string
+}
+
 export interface Stats {
   total_repos: number
   total_stars: number

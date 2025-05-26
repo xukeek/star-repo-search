@@ -11,13 +11,13 @@ import { SearchFilters } from '@/components/search-filters'
 import { 
   searchRepos, 
   syncRepos, 
-  getSyncStatus, 
   getStats,
   SearchParams, 
   SearchResponse, 
-  SyncStatus,
+  SyncStatus as SyncStatusType,
   Stats
 } from '@/lib/api'
+import { SyncStatus } from '@/components/sync-status'
 import { formatNumber } from '@/lib/utils'
 import { 
   RefreshCw, 
@@ -36,7 +36,6 @@ import {
 
 export default function HomePage() {
   const [searchResults, setSearchResults] = useState<SearchResponse | null>(null)
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -47,11 +46,6 @@ export default function HomePage() {
   // 加载初始数据
   useEffect(() => {
     loadInitialData()
-    loadSyncStatus()
-    
-    // 定期检查同步状态
-    const interval = setInterval(loadSyncStatus, 5000)
-    return () => clearInterval(interval)
   }, [])
 
   const loadInitialData = async () => {
@@ -67,16 +61,6 @@ export default function HomePage() {
       console.error('Failed to load initial data:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadSyncStatus = async () => {
-    try {
-      const status = await getSyncStatus()
-      setSyncStatus(status)
-      setSyncing(status.is_syncing)
-    } catch (error) {
-      console.error('Failed to load sync status:', error)
     }
   }
 
@@ -98,17 +82,12 @@ export default function HomePage() {
     setSyncing(true)
     try {
       await syncRepos()
-      // 同步开始后，定期检查状态
-      const checkStatus = setInterval(async () => {
-        const status = await getSyncStatus()
-        setSyncStatus(status)
-        if (!status.is_syncing) {
-          clearInterval(checkStatus)
-          setSyncing(false)
-          // 同步完成后重新加载数据
-          loadInitialData()
-        }
-      }, 2000)
+      // WebSocket会自动处理同步状态更新
+      // 同步完成后会通过WebSocket通知，这里只需要重新加载数据
+      setTimeout(() => {
+        setSyncing(false)
+        loadInitialData()
+      }, 1000)
     } catch (error) {
       console.error('Sync failed:', error)
       setSyncing(false)
@@ -240,32 +219,8 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* 同步状态 */}
-        {syncStatus && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <RefreshCw className={`h-5 w-5 ${syncStatus.is_syncing ? 'animate-spin' : ''}`} />
-                <span>同步状态</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{syncStatus.message}</p>
-                  {syncStatus.last_sync && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      上次同步: {new Date(syncStatus.last_sync).toLocaleString('zh-CN')}
-                    </p>
-                  )}
-                </div>
-                {syncStatus.is_syncing && (
-                  <Badge variant="secondary">同步中</Badge>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* 同步状态 - 使用WebSocket实时更新 */}
+        <SyncStatus className="mb-6" />
 
         {/* 搜索过滤器 */}
         <SearchFilters onSearch={handleSearch} loading={loading} />

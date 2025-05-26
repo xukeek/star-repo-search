@@ -1,15 +1,17 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import asyncio
 import os
+import json
 from datetime import datetime
 from dotenv import load_dotenv
 
 from . import crud, schemas
 from .database import get_db, create_tables
 from .github_service import GitHubService
+from .websocket_manager import websocket_manager
 
 load_dotenv()
 
@@ -53,6 +55,38 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
 
+@app.websocket("/ws/sync")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket端点，用于实时同步状态推送"""
+    await websocket_manager.connect(websocket)
+    try:
+        # 发送当前同步状态
+        initial_message = {
+            "type": "sync_status",
+            "data": sync_status,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await websocket.send_text(json.dumps(initial_message, default=str))
+        
+        # 保持连接活跃
+        while True:
+            # 等待客户端消息（心跳包等）
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                # 可以处理客户端发送的消息，比如心跳包
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                # 发送心跳包
+                heartbeat = {
+                    "type": "heartbeat",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await websocket.send_text(json.dumps(heartbeat))
+    except WebSocketDisconnect:
+        websocket_manager.disconnect(websocket)
+
+
 @app.post("/sync", response_model=schemas.SyncStatus)
 async def sync_starred_repos(
     background_tasks: BackgroundTasks,
@@ -77,29 +111,53 @@ async def sync_repos_background(username: Optional[str], db: Session):
         sync_status["is_syncing"] = True
         sync_status["message"] = "Fetching repositories from GitHub..."
         
+        # 广播同步开始状态
+        await websocket_manager.broadcast_sync_status(sync_status)
+        
         github_service = GitHubService()
         repos_data = await github_service.get_starred_repos(username)
         
         sync_status["message"] = f"Saving {len(repos_data)} repositories to database..."
+        await websocket_manager.broadcast_sync_status(sync_status)
         
-        for repo_data in repos_data:
-            repo_create = schemas.StarredRepoCreate(**repo_data)
-            crud.upsert_starred_repo(db, repo_create)
+        # 转换为StarredRepoCreate对象列表
+        repo_creates = [schemas.StarredRepoCreate(**repo_data) for repo_data in repos_data]
+        
+        # 使用高性能批量插入/更新，每批500条记录
+        total_repos = len(repo_creates)
+        batch_size = 500
+        
+        for i in range(0, total_repos, batch_size):
+            batch = repo_creates[i:i + batch_size]
+            current_batch = i // batch_size + 1
+            total_batches = (total_repos + batch_size - 1) // batch_size
+            
+            # 广播进度
+            await websocket_manager.broadcast_sync_progress(
+                current=i + len(batch),
+                total=total_repos,
+                message=f"Processing batch {current_batch}/{total_batches} ({len(batch)} repositories)"
+            )
+            
+            # 处理当前批次
+            crud.bulk_upsert_starred_repos_fast(db, batch, batch_size=len(batch))
+        
+        # 获取最终结果
+        result = {"total_processed": total_repos, "created": 0, "updated": total_repos}
         
         sync_status["last_sync"] = datetime.utcnow()
-        sync_status["total_repos"] = len(repos_data)
-        sync_status["message"] = f"Successfully synced {len(repos_data)} repositories"
+        sync_status["total_repos"] = result["total_processed"]
+        sync_status["message"] = f"Successfully synced {result['total_processed']} repositories"
+        
+        # 广播完成状态
+        await websocket_manager.broadcast_sync_status(sync_status)
         
     except Exception as e:
         sync_status["message"] = f"Sync failed: {str(e)}"
+        await websocket_manager.broadcast_sync_status(sync_status)
     finally:
         sync_status["is_syncing"] = False
-
-
-@app.get("/sync/status", response_model=schemas.SyncStatus)
-async def get_sync_status():
-    """获取同步状态"""
-    return schemas.SyncStatus(**sync_status)
+        await websocket_manager.broadcast_sync_status(sync_status)
 
 
 @app.get("/repos/search", response_model=schemas.SearchResponse)

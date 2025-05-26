@@ -68,4 +68,17 @@ class SyncStatus(BaseModel):
     is_syncing: bool
     last_sync: Optional[datetime] = None
     total_repos: int
-    message: str 
+    message: str
+
+
+class SyncProgress(BaseModel):
+    current: int
+    total: int
+    percentage: float
+    message: str
+
+
+class WebSocketMessage(BaseModel):
+    type: str  # "sync_status" | "sync_progress" | "error"
+    data: dict
+    timestamp: datetime 

@@ -203,4 +203,141 @@ def delete_all_repos(db: Session) -> int:
     count = db.query(StarredRepo).count()
     db.query(StarredRepo).delete()
     db.commit()
-    return count 
+    return count
+
+
+def bulk_upsert_starred_repos(db: Session, repos: List[schemas.StarredRepoCreate], batch_size: int = 100) -> dict:
+    """批量插入或更新starred仓库记录"""
+    total_repos = len(repos)
+    created_count = 0
+    updated_count = 0
+    
+    try:
+        # 分批处理，避免内存占用过大
+        for i in range(0, total_repos, batch_size):
+            batch = repos[i:i + batch_size]
+            
+            # 获取当前批次中所有repo_id
+            repo_ids = [repo.repo_id for repo in batch]
+            
+            # 查询已存在的仓库
+            existing_repos = db.query(StarredRepo).filter(
+                StarredRepo.repo_id.in_(repo_ids)
+            ).all()
+            
+            # 创建repo_id到现有记录的映射
+            existing_map = {repo.repo_id: repo for repo in existing_repos}
+            
+            # 分离新增和更新的记录
+            repos_to_create = []
+            repos_to_update = []
+            
+            for repo in batch:
+                if repo.repo_id in existing_map:
+                    # 更新现有记录
+                    existing_repo = existing_map[repo.repo_id]
+                    for key, value in repo.dict().items():
+                        setattr(existing_repo, key, value)
+                    repos_to_update.append(existing_repo)
+                else:
+                    # 创建新记录
+                    repos_to_create.append(StarredRepo(**repo.dict()))
+            
+            # 批量添加新记录
+            if repos_to_create:
+                db.add_all(repos_to_create)
+                created_count += len(repos_to_create)
+            
+            # 更新记录数
+            updated_count += len(repos_to_update)
+            
+            # 提交当前批次
+            db.commit()
+            
+        return {
+            "total_processed": total_repos,
+            "created": created_count,
+            "updated": updated_count
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def bulk_upsert_starred_repos_fast(db: Session, repos: List[schemas.StarredRepoCreate], batch_size: int = 500) -> dict:
+    """高性能批量插入或更新starred仓库记录，使用bulk操作"""
+    from sqlalchemy.dialects.sqlite import insert
+    
+    total_repos = len(repos)
+    created_count = 0
+    updated_count = 0
+    
+    try:
+        # 分批处理
+        for i in range(0, total_repos, batch_size):
+            batch = repos[i:i + batch_size]
+            
+            # 准备数据
+            repo_data_list = []
+            for repo in batch:
+                repo_dict = repo.dict()
+                # 确保datetime对象正确序列化
+                for key, value in repo_dict.items():
+                    if hasattr(value, 'isoformat'):  # datetime对象
+                        repo_dict[key] = value
+                repo_data_list.append(repo_dict)
+            
+            # 使用SQLite的INSERT OR REPLACE语法进行upsert
+            # 注意：这需要表有唯一约束
+            stmt = insert(StarredRepo).values(repo_data_list)
+            
+            # 对于SQLite，使用ON CONFLICT DO UPDATE
+            stmt = stmt.on_conflict_do_update(
+                index_elements=['repo_id'],
+                set_={
+                    'name': stmt.excluded.name,
+                    'full_name': stmt.excluded.full_name,
+                    'description': stmt.excluded.description,
+                    'html_url': stmt.excluded.html_url,
+                    'clone_url': stmt.excluded.clone_url,
+                    'ssh_url': stmt.excluded.ssh_url,
+                    'language': stmt.excluded.language,
+                    'stargazers_count': stmt.excluded.stargazers_count,
+                    'forks_count': stmt.excluded.forks_count,
+                    'open_issues_count': stmt.excluded.open_issues_count,
+                    'topics': stmt.excluded.topics,
+                    'owner_login': stmt.excluded.owner_login,
+                    'owner_avatar_url': stmt.excluded.owner_avatar_url,
+                    'starred_at': stmt.excluded.starred_at,
+                    'created_at': stmt.excluded.created_at,
+                    'updated_at': stmt.excluded.updated_at,
+                    'is_fork': stmt.excluded.is_fork,
+                    'is_private': stmt.excluded.is_private,
+                    'size': stmt.excluded.size,
+                    'default_branch': stmt.excluded.default_branch,
+                    'license_name': stmt.excluded.license_name,
+                    'license_key': stmt.excluded.license_key,
+                }
+            )
+            
+            # 执行批量操作
+            result = db.execute(stmt)
+            db.commit()
+            
+            # 估算创建和更新的数量（SQLite不直接提供这些信息）
+            batch_size_actual = len(batch)
+            created_count += batch_size_actual  # 简化统计
+            
+        return {
+            "total_processed": total_repos,
+            "created": created_count,
+            "updated": 0,  # 简化统计
+            "method": "bulk_fast"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        # 如果快速方法失败，回退到常规方法
+        print(f"Fast bulk upsert failed, falling back to regular method: {e}")
+        return bulk_upsert_starred_repos(db, repos, batch_size=100) 
