@@ -75,6 +75,9 @@ star-repo-search/
 │   │   └── utils.ts
 │   ├── package.json
 │   └── README.md
+├── start.sh               # Linux/macOS 启动脚本
+├── start.bat              # Windows 启动脚本
+├── quick-start.sh         # 快速启动脚本
 └── README.md              # 项目总览
 ```
 
@@ -86,6 +89,59 @@ star-repo-search/
 - Node.js 18+
 - Poetry (Python 依赖管理)
 - pnpm (推荐的 Node.js 包管理器)
+
+### 🚀 一键启动（推荐）
+
+我们提供了多种启动脚本，选择适合你的方式：
+
+#### 方式 1: 快速启动脚本（Linux/macOS）
+```bash
+# 克隆项目
+git clone <repository-url>
+cd star-repo-search
+
+# 一键启动（会自动创建环境文件）
+./quick-start.sh
+```
+
+#### 方式 2: 完整启动脚本（Linux/macOS）
+```bash
+# 带依赖安装的完整启动
+./start.sh --install
+
+# 跳过环境检查的启动
+./start.sh --skip-env-check
+
+# 查看帮助
+./start.sh --help
+```
+
+#### 方式 3: Windows 启动脚本
+```cmd
+# 双击运行或在命令行中执行
+start.bat
+
+# 带参数启动
+start.bat --install
+```
+
+#### 方式 4: 使用 pnpm 脚本
+```bash
+# 安装所有依赖
+pnpm run setup
+
+# 同时启动前后端（需要先安装 concurrently）
+pnpm install concurrently
+pnpm run start:all
+
+# 分别启动
+pnpm run dev:backend    # 启动后端
+pnpm run dev:frontend   # 启动前端
+```
+
+### 📝 手动设置
+
+如果你喜欢手动设置，可以按照以下步骤：
 
 ### 1. 克隆项目
 

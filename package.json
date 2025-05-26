@@ -6,11 +6,20 @@
   "packageManager": "pnpm@10.10.0",
   "scripts": {
     "dev": "pnpm --filter frontend dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "cd backend && poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "start:all": "concurrently \"pnpm dev:backend\" \"pnpm dev:frontend\"",
     "build": "pnpm --filter frontend build",
     "start": "pnpm --filter frontend start",
     "lint": "pnpm --filter frontend lint",
+    "install:all": "cd backend && poetry install && cd .. && pnpm install",
     "install:frontend": "pnpm --filter frontend install",
-    "clean": "pnpm --filter frontend clean && rm -rf node_modules"
+    "install:backend": "cd backend && poetry install",
+    "clean": "pnpm --filter frontend clean && rm -rf node_modules",
+    "setup": "pnpm install:all && echo '请配置 backend/.env 文件'"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   },
   "keywords": [
     "github",
