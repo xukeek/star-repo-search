@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SearchParams, getLanguages, getOwners } from '@/lib/api'
-import { Search, Filter, X } from 'lucide-react'
+import { Search, Filter, X, Calendar, ArrowUpDown } from 'lucide-react'
 
 interface SearchFiltersProps {
   onSearch: (params: SearchParams) => void
@@ -19,6 +20,10 @@ export function SearchFilters({ onSearch, loading }: SearchFiltersProps) {
   const [owner, setOwner] = useState('')
   const [minStars, setMinStars] = useState('')
   const [maxStars, setMaxStars] = useState('')
+  const [starredAfter, setStarredAfter] = useState('')
+  const [starredBefore, setStarredBefore] = useState('')
+  const [sortBy, setSortBy] = useState<string>('starred_at')
+  const [sortOrder, setSortOrder] = useState<string>('desc')
   const [hasTopics, setHasTopics] = useState<boolean | undefined>(undefined)
   const [isFork, setIsFork] = useState<boolean | undefined>(undefined)
   
@@ -49,6 +54,10 @@ export function SearchFilters({ onSearch, loading }: SearchFiltersProps) {
       owner: owner || undefined,
       min_stars: minStars ? parseInt(minStars) : undefined,
       max_stars: maxStars ? parseInt(maxStars) : undefined,
+      starred_after: starredAfter || undefined,
+      starred_before: starredBefore || undefined,
+      sort_by: sortBy as any,
+      sort_order: sortOrder as any,
       has_topics: hasTopics,
       is_fork: isFork,
       page: 1,
@@ -63,16 +72,22 @@ export function SearchFilters({ onSearch, loading }: SearchFiltersProps) {
     setOwner('')
     setMinStars('')
     setMaxStars('')
+    setStarredAfter('')
+    setStarredBefore('')
+    setSortBy('starred_at')
+    setSortOrder('desc')
     setHasTopics(undefined)
     setIsFork(undefined)
     onSearch({ page: 1, per_page: 20 })
   }
 
-  const hasActiveFilters = query || language || owner || minStars || maxStars || hasTopics !== undefined || isFork !== undefined
+  const hasActiveFilters = query || language || owner || minStars || maxStars || 
+    starredAfter || starredBefore || hasTopics !== undefined || isFork !== undefined ||
+    sortBy !== 'starred_at' || sortOrder !== 'desc'
 
   return (
     <div className="space-y-4">
-      {/* 主搜索框 */}
+      {/* 主搜索框和排序 */}
       <div className="flex space-x-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -84,6 +99,34 @@ export function SearchFilters({ onSearch, loading }: SearchFiltersProps) {
             className="pl-10"
           />
         </div>
+        
+        {/* 排序选择器 */}
+        <div className="flex space-x-2">
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-40">
+              <ArrowUpDown className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="starred_at">Star 时间</SelectItem>
+              <SelectItem value="stargazers_count">Star 数量</SelectItem>
+              <SelectItem value="forks_count">Fork 数量</SelectItem>
+              <SelectItem value="created_at">创建时间</SelectItem>
+              <SelectItem value="updated_at">更新时间</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select value={sortOrder} onValueChange={setSortOrder}>
+            <SelectTrigger className="w-24">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">降序</SelectItem>
+              <SelectItem value="asc">升序</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
         <Button onClick={handleSearch} disabled={loading}>
           搜索
         </Button>
@@ -159,6 +202,32 @@ export function SearchFilters({ onSearch, loading }: SearchFiltersProps) {
                     onChange={(e) => setMaxStars(e.target.value)}
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Star 时间范围 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block flex items-center">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Star 开始时间
+                </label>
+                <Input
+                  type="date"
+                  value={starredAfter}
+                  onChange={(e) => setStarredAfter(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block flex items-center">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Star 结束时间
+                </label>
+                <Input
+                  type="date"
+                  value={starredBefore}
+                  onChange={(e) => setStarredBefore(e.target.value)}
+                />
               </div>
             </div>
 
@@ -262,6 +331,40 @@ export function SearchFilters({ onSearch, loading }: SearchFiltersProps) {
               <X
                 className="h-3 w-3 ml-1 cursor-pointer"
                 onClick={() => setMaxStars('')}
+              />
+            </Badge>
+          )}
+          {starredAfter && (
+            <Badge variant="secondary">
+              Star 开始: {starredAfter}
+              <X
+                className="h-3 w-3 ml-1 cursor-pointer"
+                onClick={() => setStarredAfter('')}
+              />
+            </Badge>
+          )}
+          {starredBefore && (
+            <Badge variant="secondary">
+              Star 结束: {starredBefore}
+              <X
+                className="h-3 w-3 ml-1 cursor-pointer"
+                onClick={() => setStarredBefore('')}
+              />
+            </Badge>
+          )}
+          {(sortBy !== 'starred_at' || sortOrder !== 'desc') && (
+            <Badge variant="secondary">
+              排序: {sortBy === 'starred_at' ? 'Star时间' : 
+                     sortBy === 'stargazers_count' ? 'Star数量' :
+                     sortBy === 'forks_count' ? 'Fork数量' :
+                     sortBy === 'created_at' ? '创建时间' : '更新时间'} 
+              ({sortOrder === 'desc' ? '降序' : '升序'})
+              <X
+                className="h-3 w-3 ml-1 cursor-pointer"
+                onClick={() => {
+                  setSortBy('starred_at')
+                  setSortOrder('desc')
+                }}
               />
             </Badge>
           )}

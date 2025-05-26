@@ -47,8 +47,12 @@ def search_repos(
     owner: Optional[str] = None,
     min_stars: Optional[int] = None,
     max_stars: Optional[int] = None,
+    starred_after: Optional[str] = None,
+    starred_before: Optional[str] = None,
     has_topics: Optional[bool] = None,
     is_fork: Optional[bool] = None,
+    sort_by: str = 'starred_at',
+    sort_order: str = 'desc',
     page: int = 1,
     per_page: int = 20
 ) -> tuple[List[StarredRepo], int]:
@@ -80,6 +84,35 @@ def search_repos(
     if max_stars is not None:
         conditions.append(StarredRepo.stargazers_count <= max_stars)
     
+    # 添加star时间范围搜索
+    if starred_after:
+        from datetime import datetime
+        try:
+            # 处理多种日期格式
+            if 'T' in starred_after:
+                # ISO格式: 2023-01-01T00:00:00Z
+                after_date = datetime.fromisoformat(starred_after.replace('Z', '+00:00'))
+            else:
+                # 日期格式: 2023-01-01
+                after_date = datetime.strptime(starred_after, '%Y-%m-%d')
+            conditions.append(StarredRepo.starred_at >= after_date)
+        except ValueError:
+            pass  # 忽略无效的日期格式
+    
+    if starred_before:
+        from datetime import datetime
+        try:
+            # 处理多种日期格式
+            if 'T' in starred_before:
+                # ISO格式: 2023-01-01T23:59:59Z
+                before_date = datetime.fromisoformat(starred_before.replace('Z', '+00:00'))
+            else:
+                # 日期格式: 2023-01-01，设置为当天结束时间
+                before_date = datetime.strptime(starred_before + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+            conditions.append(StarredRepo.starred_at <= before_date)
+        except ValueError:
+            pass  # 忽略无效的日期格式
+    
     if has_topics is not None:
         if has_topics:
             conditions.append(and_(
@@ -102,10 +135,17 @@ def search_repos(
     # 获取总数
     total = db_query.count()
     
+    # 构建排序
+    sort_column = getattr(StarredRepo, sort_by, StarredRepo.starred_at)
+    if sort_order.lower() == 'asc':
+        order_clause = sort_column.asc()
+    else:
+        order_clause = sort_column.desc()
+    
     # 分页和排序
     repos = (
         db_query
-        .order_by(StarredRepo.starred_at.desc())
+        .order_by(order_clause)
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()

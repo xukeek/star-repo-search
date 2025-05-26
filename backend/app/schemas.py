@@ -46,8 +46,12 @@ class SearchParams(BaseModel):
     owner: Optional[str] = None
     min_stars: Optional[int] = None
     max_stars: Optional[int] = None
+    starred_after: Optional[str] = None
+    starred_before: Optional[str] = None
     has_topics: Optional[bool] = None
     is_fork: Optional[bool] = None
+    sort_by: Optional[str] = 'starred_at'
+    sort_order: Optional[str] = 'desc'
     page: int = 1
     per_page: int = 20
 

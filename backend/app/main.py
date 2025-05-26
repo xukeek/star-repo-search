@@ -109,8 +109,12 @@ async def search_repos(
     owner: Optional[str] = None,
     min_stars: Optional[int] = None,
     max_stars: Optional[int] = None,
+    starred_after: Optional[str] = None,
+    starred_before: Optional[str] = None,
     has_topics: Optional[bool] = None,
     is_fork: Optional[bool] = None,
+    sort_by: str = 'starred_at',
+    sort_order: str = 'desc',
     page: int = 1,
     per_page: int = 20,
     db: Session = Depends(get_db)
@@ -126,8 +130,12 @@ async def search_repos(
         owner=owner,
         min_stars=min_stars,
         max_stars=max_stars,
+        starred_after=starred_after,
+        starred_before=starred_before,
         has_topics=has_topics,
         is_fork=is_fork,
+        sort_by=sort_by,
+        sort_order=sort_order,
         page=page,
         per_page=per_page
     )

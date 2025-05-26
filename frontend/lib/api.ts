@@ -40,8 +40,12 @@ export interface SearchParams {
   owner?: string
   min_stars?: number
   max_stars?: number
+  starred_after?: string
+  starred_before?: string
   has_topics?: boolean
   is_fork?: boolean
+  sort_by?: 'starred_at' | 'stargazers_count' | 'forks_count' | 'created_at' | 'updated_at'
+  sort_order?: 'asc' | 'desc'
   page?: number
   per_page?: number
 }
