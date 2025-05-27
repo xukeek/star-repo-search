@@ -6,6 +6,7 @@ from typing import List, Dict, Optional, Tuple
 from openai import OpenAI
 import logging
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 
@@ -31,24 +32,63 @@ class VectorService:
             metadata={"hnsw:space": "cosine"}
         )
         
-        # 初始化DeepSeek客户端
-        self.deepseek_client = OpenAI(
-            api_key=os.getenv("DEEPSEEK_API_KEY"),
-            base_url="https://api.deepseek.com"
-        )
+        # 选择 embedding 方法
+        self.embedding_method = os.getenv("EMBEDDING_METHOD", "sentence_transformers")
+        
+        if self.embedding_method == "deepseek":
+            # 初始化DeepSeek客户端
+            self.deepseek_client = OpenAI(
+                api_key=os.getenv("DEEPSEEK_API_KEY"),
+                base_url="https://api.deepseek.com"
+            )
+        elif self.embedding_method == "sentence_transformers":
+            # 初始化Sentence Transformers模型
+            model_name = os.getenv("SENTENCE_TRANSFORMER_MODEL", "all-MiniLM-L6-v2")
+            logger.info(f"加载 Sentence Transformer 模型: {model_name}")
+            self.sentence_model = SentenceTransformer(model_name)
+        elif self.embedding_method == "openai":
+            # 初始化OpenAI客户端
+            self.openai_client = OpenAI(
+                api_key=os.getenv("OPENAI_API_KEY")
+            )
         
     def get_embedding(self, text: str) -> List[float]:
-        """使用DeepSeek API获取文本向量"""
+        """获取文本向量"""
         try:
-            response = self.deepseek_client.embeddings.create(
-                model="deepseek-embedding",
-                input=text,
-                encoding_format="float"
-            )
-            return response.data[0].embedding
+            if self.embedding_method == "deepseek":
+                return self._get_deepseek_embedding(text)
+            elif self.embedding_method == "sentence_transformers":
+                return self._get_sentence_transformer_embedding(text)
+            elif self.embedding_method == "openai":
+                return self._get_openai_embedding(text)
+            else:
+                raise ValueError(f"不支持的 embedding 方法: {self.embedding_method}")
         except Exception as e:
             logger.error(f"获取向量失败: {e}")
             raise
+    
+    def _get_deepseek_embedding(self, text: str) -> List[float]:
+        """使用DeepSeek API获取文本向量"""
+        response = self.deepseek_client.embeddings.create(
+            model="deepseek-embedding",
+            input=text,
+            encoding_format="float"
+        )
+        return response.data[0].embedding
+    
+    def _get_sentence_transformer_embedding(self, text: str) -> List[float]:
+        """使用Sentence Transformers获取文本向量"""
+        embedding = self.sentence_model.encode(text, convert_to_tensor=False)
+        return embedding.tolist()
+    
+    def _get_openai_embedding(self, text: str) -> List[float]:
+        """使用OpenAI API获取文本向量"""
+        response = self.openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=text,
+            encoding_format="float"
+        )
+        return response.data[0].embedding
     
     def add_readme(self, repo_id: int, content: str, metadata: Dict = None) -> str:
         """添加README内容到向量数据库"""
