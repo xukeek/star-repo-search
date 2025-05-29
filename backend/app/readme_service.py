@@ -38,6 +38,8 @@ class ReadmeService:
                     async with httpx.AsyncClient() as client:
                         response = await client.get(url, headers=headers)
                         
+                        logger.debug(f"请求 {url} 返回状态码: {response.status_code}")
+                        
                         if response.status_code == 200:
                             data = response.json()
                             if data.get("type") == "file" and data.get("content"):
@@ -46,6 +48,17 @@ class ReadmeService:
                                 content = base64.b64decode(data["content"]).decode('utf-8', errors='ignore')
                                 logger.info(f"成功获取 {owner}/{repo} 的 {readme_file}")
                                 return self._clean_readme_content(content)
+                        elif response.status_code == 404:
+                            logger.debug(f"{owner}/{repo} 中不存在 {readme_file}")
+                        elif response.status_code == 403:
+                            logger.warning(f"访问 {owner}/{repo} 的 {readme_file} 被拒绝 (403)")
+                            # 如果是403错误，可能是私有仓库或API限制
+                            break
+                        elif response.status_code == 401:
+                            logger.error(f"GitHub API认证失败 (401)")
+                            break
+                        else:
+                            logger.warning(f"获取 {readme_file} 失败，状态码: {response.status_code}")
                                 
                 except Exception as e:
                     logger.debug(f"尝试获取 {readme_file} 失败: {e}")

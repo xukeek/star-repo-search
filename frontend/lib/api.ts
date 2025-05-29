@@ -131,4 +131,61 @@ export const getGitHubUser = async () => {
 export const getGitHubRateLimit = async () => {
   const response = await api.get('/github/rate-limit')
   return response.data
+}
+
+// README处理相关接口
+export interface ReadmeStats {
+  total_repos: number
+  processed_repos: number
+  vector_documents: number
+  processing_rate: string
+  vector_stats?: {
+    total_documents: number
+    collection_name: string
+  }
+}
+
+export interface ReadmeProcessStatus {
+  is_processing: boolean
+  last_run?: string
+  next_run?: string
+  total_processed: number
+  message: string
+}
+
+export interface SchedulerStatus {
+  is_running: boolean
+  readme_processing: ReadmeProcessStatus
+  jobs: Array<{
+    id: string
+    name: string
+    next_run_time?: string
+    trigger: string
+  }>
+}
+
+// README处理API函数
+export const processReadmes = async (maxRepos?: number): Promise<{ message: string; max_repos?: number }> => {
+  const response = await api.post('/readmes/process', maxRepos ? { max_repos: maxRepos } : {})
+  return response.data
+}
+
+export const getReadmeStats = async (): Promise<ReadmeStats> => {
+  const response = await api.get('/readmes/stats')
+  return response.data
+}
+
+export const getSchedulerStatus = async (): Promise<SchedulerStatus> => {
+  const response = await api.get('/scheduler/status')
+  return response.data
+}
+
+export const startScheduler = async (): Promise<{ message: string }> => {
+  const response = await api.post('/scheduler/start')
+  return response.data
+}
+
+export const stopScheduler = async (): Promise<{ message: string }> => {
+  const response = await api.post('/scheduler/stop')
+  return response.data
 } 

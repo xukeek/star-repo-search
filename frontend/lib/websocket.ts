@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 
 // WebSocket消息类型
 export interface WebSocketMessage {
-  type: 'sync_status' | 'sync_progress' | 'heartbeat' | 'error'
+  type: 'sync_status' | 'sync_progress' | 'readme_status' | 'heartbeat' | 'error'
   data: any
   timestamp: string
 }
@@ -23,6 +23,15 @@ export interface SyncStatus {
   message: string
 }
 
+// README处理状态数据
+export interface ReadmeProcessStatus {
+  is_processing: boolean
+  last_run?: string
+  next_run?: string
+  total_processed: number
+  message: string
+}
+
 // WebSocket连接状态
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -31,6 +40,7 @@ export function useWebSocket(url: string) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null)
+  const [readmeStatus, setReadmeStatus] = useState<ReadmeProcessStatus | null>(null)
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
   
   const ws = useRef<WebSocket | null>(null)
@@ -73,6 +83,9 @@ export function useWebSocket(url: string) {
               break
             case 'sync_progress':
               setSyncProgress(message.data)
+              break
+            case 'readme_status':
+              setReadmeStatus(message.data)
               break
             case 'heartbeat':
               // 心跳包，不需要特殊处理
@@ -168,6 +181,7 @@ export function useWebSocket(url: string) {
     connectionStatus,
     syncStatus,
     syncProgress,
+    readmeStatus,
     lastMessage,
     connect,
     disconnect,

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RepoCard } from '@/components/repo-card'
 import { RepoList } from '@/components/repo-list'
 import { SearchFilters } from '@/components/search-filters'
+import { Navigation } from '@/components/navigation'
 import { 
   searchRepos, 
   syncRepos, 
@@ -17,7 +18,6 @@ import {
   SyncStatus as SyncStatusType,
   Stats
 } from '@/lib/api'
-import { SyncStatus } from '@/components/sync-status'
 import { formatNumber } from '@/lib/utils'
 import { 
   RefreshCw, 
@@ -28,7 +28,6 @@ import {
   ChevronLeft, 
   ChevronRight,
   Loader2,
-  Github,
   Grid3X3,
   List,
   MoreHorizontal
@@ -140,34 +139,29 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* 头部 */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Github className="h-8 w-8" />
-              <div>
-                <h1 className="text-3xl font-bold">Star Repo Search</h1>
-                <p className="text-muted-foreground">搜索你的 GitHub starred 仓库</p>
-              </div>
-            </div>
-            <Button 
-              onClick={handleSync} 
-              disabled={syncing}
-              className="flex items-center space-x-2"
-            >
-              {syncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span>{syncing ? '同步中...' : '同步仓库'}</span>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Navigation />
 
       <div className="container mx-auto px-4 py-8">
+        {/* 操作栏 */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h2 className="text-2xl font-bold">仓库搜索</h2>
+            <p className="text-muted-foreground">搜索和浏览你的 GitHub starred 仓库</p>
+          </div>
+          <Button 
+            onClick={handleSync} 
+            disabled={syncing}
+            className="flex items-center space-x-2"
+          >
+            {syncing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            <span>{syncing ? '同步中...' : '同步仓库'}</span>
+          </Button>
+        </div>
+
         {/* 统计信息 */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -218,9 +212,6 @@ export default function HomePage() {
             </Card>
           </div>
         )}
-
-        {/* 同步状态 - 使用WebSocket实时更新 */}
-        <SyncStatus className="mb-6" />
 
         {/* 搜索过滤器 */}
         <SearchFilters onSearch={handleSearch} loading={loading} />

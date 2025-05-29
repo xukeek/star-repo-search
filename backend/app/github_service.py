@@ -110,4 +110,8 @@ class GitHubService:
                 headers=self.headers
             )
             response.raise_for_status()
-            return response.json() 
+            return response.json()
+
+    def _get_headers(self) -> Dict[str, str]:
+        """获取API请求头"""
+        return self.headers 
